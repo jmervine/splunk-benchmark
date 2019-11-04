@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jmervine/splunk-benchmark/lib/math"
 	"github.com/jmervine/splunking"
 )
 
@@ -172,33 +173,19 @@ func (sr *Runner) results(thread int) (bool, error) {
 }
 
 func (sr *Runner) Avg(thread int) float64 {
-	v := sr.resultValues[thread]
-	t := float64(0)
-
-	for _, n := range v {
-		t = t + n
-	}
-
-	return t / float64(len(v))
+	return math.Avg(sr.resultValues[thread])
 }
 
 func (sr *Runner) Med(thread int) float64 {
-	v := sr.resultValues[thread]
-
-	nn := len(v) / 2
-	if nn%2 != 0 {
-		return v[nn]
-	}
-
-	return (v[nn+1] + v[nn]) / 2
+	return math.Med(sr.resultValues[thread])
 }
 
 func (sr *Runner) Min(thread int) float64 {
-	return sr.resultValues[thread][0]
+	return math.Min(sr.resultValues[thread])
 }
 
 func (sr *Runner) Max(thread int) float64 {
-	return sr.resultValues[thread][len(sr.resultValues)-1]
+	return math.Max(sr.resultValues[thread])
 }
 
 func (sr *Runner) PrettyPrint() {
@@ -206,6 +193,7 @@ func (sr *Runner) PrettyPrint() {
 	for i := 0; i < sr.Threads; i++ {
 		sr.PrintResults(i)
 	}
+	sr.PrintAgg()
 	sr.PrintFooter()
 
 	if sr.vverbose {
@@ -218,6 +206,18 @@ func (sr *Runner) PrintBanner() {
 	fmt.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
 		"Thread", "Runs", "Average", "Median", "Min", "Max")
 	fmt.Println("--------------------------------------------------------------------------------")
+}
+
+func (sr *Runner) PrintAgg() {
+	v := []float64{}
+	for _, t := range sr.resultValues {
+		v = append(v, t...)
+	}
+	sort.Float64s(v)
+
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+		math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
 }
 
 func (sr *Runner) PrintFooter() {
