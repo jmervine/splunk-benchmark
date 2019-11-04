@@ -28,6 +28,7 @@ type Runner struct {
 	client   splunking.SplunkRequest
 	verbose  bool
 	vverbose bool
+	runs     int
 
 	Query        string
 	Threads      int
@@ -41,7 +42,7 @@ type Runner struct {
 func NewRunner(host, query string, threads int, runs int, delay float64, verbose, vverbose bool) (*Runner, error) {
 	var err error
 
-	if threads == 0 {
+	if threads < 1 {
 		threads = 1
 	}
 
@@ -71,9 +72,9 @@ func NewRunner(host, query string, threads int, runs int, delay float64, verbose
 }
 
 func (sr *Runner) Do(thread int) error {
-	for i := 0; i < sr.Runs; i++ {
+	for {
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Starting run %d (thread %d)...\n", i+1, thread)
+			fmt.Printf("Starting run %d (thread %d)...\n", sr.runs+1, thread)
 		}
 
 		err := sr.search(thread)
@@ -93,8 +94,14 @@ func (sr *Runner) Do(thread int) error {
 		}
 
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Finished run %d (thread %d).\n", i+1, thread)
+			fmt.Printf("Finished run %d (thread %d).\n", sr.runs+1, thread)
 		}
+
+		if sr.Runs > 0 && sr.runs == sr.Runs {
+			break
+		}
+
+		sr.runs++
 	}
 
 	sort.Float64s(sr.resultValues[thread])
@@ -220,5 +227,5 @@ func (sr *Runner) PrintFooter() {
 
 func (sr *Runner) PrintResults(thread int) {
 	fmt.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		thread, sr.Runs, sr.Avg(thread), sr.Med(thread), sr.Min(thread), sr.Max(thread))
+		thread, sr.runs, sr.Avg(thread), sr.Med(thread), sr.Min(thread), sr.Max(thread))
 }

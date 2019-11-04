@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/jmervine/splunk-benchmark/lib/search"
 )
@@ -21,7 +23,7 @@ func main() {
 
 	flag.StringVar(&host, "s", "", "Splunk hostname (https://uname:pword@host:port)")
 	flag.StringVar(&query, "S", "", "Splunk query")
-	flag.IntVar(&runs, "n", 10, "Number of search runs to perform")
+	flag.IntVar(&runs, "n", 1, "Number of search runs to perform; 0 runs until SIGINT")
 	flag.IntVar(&threads, "T", 1, "Number of threads, e.g. 10 runs * 2 threads will run 20 total searches")
 	flag.Float64Var(&delay, "d", 0.0, "Delay in seconds between runs")
 	flag.BoolVar(&verbose, "v", false, "Verbose output")
@@ -37,6 +39,16 @@ func main() {
 	runner, err := search.NewRunner(host, query, threads, runs, delay, verbose, vverbose)
 	if err != nil {
 		panic(err)
+	}
+
+	if runs < 1 {
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigs
+			runner.PrettyPrint()
+			os.Exit(0)
+		}()
 	}
 
 	var wg sync.WaitGroup
