@@ -1,0 +1,4 @@
+# github.com/jmervine/splunking v0.0.0-20191104150221-9f18ea909c54
+github.com/jmervine/splunking
+# github.com/joeshaw/envdecode v0.0.0-20170502020559-6326cbed175e
+github.com/joeshaw/envdecode
