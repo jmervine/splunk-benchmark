@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jmervine/splunking"
 )
@@ -30,27 +31,26 @@ type SplunkRun struct {
 
 	Query        string
 	Runs         int
+	Delay        time.Duration
 	Sid          string
 	Results      map[string]float64
 	resultValues []float64
 }
 
-func NewRun(host, query string, runs int, verbose, vverbose bool) (*SplunkRun, error) {
+func NewRun(host, query string, runs int, delay float64, verbose, vverbose bool) (*SplunkRun, error) {
 	var err error
 
 	sr := new(SplunkRun)
 
 	sr.Query = query
 	sr.Runs = runs
+	sr.Delay = time.Duration(delay) * time.Second
 	sr.Results = make(map[string]float64)
 	sr.verbose = verbose
 	sr.vverbose = vverbose
 
 	sr.client, err = splunking.InitURL(host)
 
-	if sr.verbose {
-		fmt.Printf("Query: %s\n---\n\n", query)
-	}
 	if vverbose {
 		fmt.Printf("%#v\n---\n\n", sr)
 	}
@@ -91,7 +91,7 @@ func (sr *SplunkRun) Do() error {
 
 func (sr *SplunkRun) search() error {
 	if sr.vverbose {
-		fmt.Printf("  Search Sid %s...\n", sr.Sid)
+		fmt.Printf("  Search Sid ")
 	}
 
 	resp, err := sr.client.Post(search, strings.NewReader("search="+sr.Query))
@@ -106,6 +106,10 @@ func (sr *SplunkRun) search() error {
 	err = json.NewDecoder(resp.Body).Decode(s)
 	if err != nil {
 		return err
+	}
+
+	if sr.vverbose {
+		fmt.Printf("%s...\n", s.Sid)
 	}
 
 	sr.Sid = s.Sid
@@ -182,7 +186,7 @@ func (sr *SplunkRun) PrettyPrint() {
 	fmt.Println("--------------------------------------------------------------------------------")
 	sr.PrintResults()
 	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf(" Query: %.70s\n\n", sr.Query)
+	fmt.Printf(" Query: %.70s...\n\n", sr.Query)
 }
 
 func (sr *SplunkRun) PrintResults() {
