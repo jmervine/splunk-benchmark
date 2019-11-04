@@ -2,6 +2,11 @@
 
 Simple search load generation tool for Splunk.
 
+#### Install
+```
+go get github.com/jmervine/splunk-benchmark
+```
+
 #### Usage
 ```
 jmervine@jmervine-ltm1 splunk-benchmark $ ./splunk-benchmark -h
