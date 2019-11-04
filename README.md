@@ -7,13 +7,13 @@ Simple search load generation tool for Splunk.
 jmervine@jmervine-ltm1 splunk-benchmark $ ./splunk-benchmark -h
 Usage of ./splunk-benchmark:
   -S string
-        Splunk query
+        Splunk query (default "search * | head 1")
   -T int
         Number of threads, e.g. 10 runs * 2 threads will run 20 total searches (default 1)
   -d float
-        Delay in seconds between runs
+        Delay in seconds between runs (default 0.0)
   -n int
-        Number of search runs to perform (default 10)
+        Number of search runs to perform; 0 runs until SIGINT (default 1)
   -s string
         Splunk hostname (https://uname:pword@host:port)
   -v    Verbose output
