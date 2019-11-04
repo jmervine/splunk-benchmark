@@ -11,16 +11,17 @@ import (
 	"github.com/jmervine/splunk-benchmark/lib/search"
 )
 
-const Version = "0.0.2"
+const Version = "0.0.3"
 
 func main() {
 	var (
 		delay                      float64
-		host, query                string
+		host, query, output        string
 		runs, threads              int
 		verbose, vverbose, version bool
 	)
 
+	flag.StringVar(&output, "o", "text", "Output method: text or json")
 	flag.StringVar(&host, "s", "", "Splunk hostname (https://uname:pword@host:port)")
 	flag.StringVar(&query, "S", "search * | head 1", "Splunk query")
 	flag.IntVar(&runs, "n", 1, "Number of search runs to perform; 0 runs until SIGINT")
@@ -63,5 +64,9 @@ func main() {
 
 	wg.Wait()
 
-	runner.PrettyPrint()
+	if output == "json" {
+		runner.JsonPrint()
+	} else {
+		runner.PrettyPrint()
+	}
 }

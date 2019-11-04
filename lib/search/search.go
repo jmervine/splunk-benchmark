@@ -1,6 +1,7 @@
 package search
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -188,6 +189,54 @@ func (sr *Runner) Max(thread int) float64 {
 	return math.Max(sr.resultValues[thread])
 }
 
+func (sr *Runner) JsonPrint() {
+	type T struct {
+		Average float64   `json:"average"`
+		Median  float64   `json:"median"`
+		Min     float64   `json:"min"`
+		Max     float64   `json:"max"`
+		Run     []float64 `json:"runDuration"`
+	}
+
+	type O struct {
+		Query   string  `json:"query"`
+		Average float64 `json:"average"`
+		Median  float64 `json:"median"`
+		Min     float64 `json:"min"`
+		Max     float64 `json:"max"`
+		Thread  []T     `json:"thread"`
+	}
+
+	o := O{}
+
+	o.Query = sr.Query
+	o.Average, o.Median, o.Min, o.Max = sr.agg()
+
+	for i, _ := range sr.resultValues {
+		v := T{}
+		v.Average = sr.Avg(i)
+		v.Median = sr.Med(i)
+		v.Min = sr.Min(i)
+		v.Max = sr.Max(i)
+		v.Run = sr.resultValues[i]
+
+		o.Thread = append(o.Thread, v)
+	}
+
+	data, err := json.Marshal(o)
+	if err != nil {
+		panic(err)
+	}
+
+	var j bytes.Buffer
+	err = json.Indent(&j, data, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(j.String())
+}
+
 func (sr *Runner) PrettyPrint() {
 	sr.PrintBanner()
 	for i := 0; i < sr.Threads; i++ {
@@ -208,16 +257,22 @@ func (sr *Runner) PrintBanner() {
 	fmt.Println("--------------------------------------------------------------------------------")
 }
 
-func (sr *Runner) PrintAgg() {
+func (sr *Runner) agg() (avg, med, min, max float64) {
 	v := []float64{}
 	for _, t := range sr.resultValues {
 		v = append(v, t...)
 	}
 	sort.Float64s(v)
 
+	return math.Avg(v), math.Med(v), math.Min(v), math.Max(v)
+}
+
+func (sr *Runner) PrintAgg() {
+	avg, med, min, max := sr.agg()
+
 	fmt.Println("--------------------------------------------------------------------------------")
 	fmt.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
+		avg, med, min, max)
 }
 
 func (sr *Runner) PrintFooter() {
