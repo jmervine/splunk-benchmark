@@ -24,28 +24,40 @@ type splunkStatus struct {
 	} `json:"entry"`
 }
 
-type SplunkRun struct {
+type Runner struct {
 	client   splunking.SplunkRequest
 	verbose  bool
 	vverbose bool
 
 	Query        string
+	Threads      int
 	Runs         int
 	Delay        time.Duration
-	Sid          string
-	Results      map[string]float64
-	resultValues []float64
+	Sids         []string
+	Results      []map[string]float64
+	resultValues [][]float64
 }
 
-func NewRun(host, query string, runs int, delay float64, verbose, vverbose bool) (*SplunkRun, error) {
+func NewRunner(host, query string, threads int, runs int, delay float64, verbose, vverbose bool) (*Runner, error) {
 	var err error
 
-	sr := new(SplunkRun)
+	if threads == 0 {
+		threads = 1
+	}
+
+	sr := new(Runner)
+	sr.Results = make([]map[string]float64, threads)
+	sr.Sids = make([]string, threads)
+	sr.resultValues = make([][]float64, threads)
+
+	for i := 0; i < threads; i++ {
+		sr.Results[i] = make(map[string]float64)
+	}
 
 	sr.Query = query
+	sr.Threads = threads
 	sr.Runs = runs
 	sr.Delay = time.Duration(delay) * time.Second
-	sr.Results = make(map[string]float64)
 	sr.verbose = verbose
 	sr.vverbose = vverbose
 
@@ -58,19 +70,19 @@ func NewRun(host, query string, runs int, delay float64, verbose, vverbose bool)
 	return sr, err
 }
 
-func (sr *SplunkRun) Do() error {
+func (sr *Runner) Do(thread int) error {
 	for i := 0; i < sr.Runs; i++ {
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Starting run %d...\n", i+1)
+			fmt.Printf("Starting run %d (thread %d)...\n", i+1, thread)
 		}
 
-		err := sr.search()
+		err := sr.search(thread)
 		if err != nil {
 			return err
 		}
 
 		for {
-			done, err := sr.results()
+			done, err := sr.results(thread)
 			if err != nil {
 				return err
 			}
@@ -81,15 +93,15 @@ func (sr *SplunkRun) Do() error {
 		}
 
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Finished run %d.\n", i+1)
+			fmt.Printf("Finished run %d (thread %d).\n", i+1, thread)
 		}
 	}
 
-	sort.Float64s(sr.resultValues)
+	sort.Float64s(sr.resultValues[thread])
 	return nil
 }
 
-func (sr *SplunkRun) search() error {
+func (sr *Runner) search(thread int) error {
 	if sr.vverbose {
 		fmt.Printf("  Search Sid ")
 	}
@@ -112,17 +124,17 @@ func (sr *SplunkRun) search() error {
 		fmt.Printf("%s...\n", s.Sid)
 	}
 
-	sr.Sid = s.Sid
+	sr.Sids[thread] = s.Sid
 
 	return nil
 }
 
-func (sr *SplunkRun) results() (bool, error) {
+func (sr *Runner) results(thread int) (bool, error) {
 	if sr.vverbose {
-		fmt.Printf("    Checking results for %s...", sr.Sid)
+		fmt.Printf("    Checking results for %s...", sr.Sids[thread])
 	}
 
-	resp, err := sr.client.Get(fmt.Sprintf(status, sr.Sid), nil)
+	resp, err := sr.client.Get(fmt.Sprintf(status, sr.Sids[thread]), nil)
 	if err != nil {
 		return false, err
 	}
@@ -139,30 +151,32 @@ func (sr *SplunkRun) results() (bool, error) {
 		fmt.Printf(" done: %v\n", done)
 
 		if done {
-			fmt.Printf("  Finished Sid %s in %f.\n", sr.Sid, s.Entry[0].Content.RunDuration)
+			fmt.Printf("  Finished Sid %s in %f.\n", sr.Sids[thread], s.Entry[0].Content.RunDuration)
 		}
 	}
 
 	if done {
-		sr.Results[sr.Sid] = s.Entry[0].Content.RunDuration
-		sr.resultValues = append(sr.resultValues, s.Entry[0].Content.RunDuration)
+		sr.Results[thread][sr.Sids[thread]] = s.Entry[0].Content.RunDuration
+		sr.resultValues[thread] = append(sr.resultValues[thread], s.Entry[0].Content.RunDuration)
 		return true, nil
 	}
 
 	return false, nil
 }
 
-func (sr *SplunkRun) Avg() float64 {
+func (sr *Runner) Avg(thread int) float64 {
+	v := sr.resultValues[thread]
 	t := float64(0)
-	for _, n := range sr.resultValues {
+
+	for _, n := range v {
 		t = t + n
 	}
 
-	return t / float64(len(sr.resultValues))
+	return t / float64(len(v))
 }
 
-func (sr *SplunkRun) Med() float64 {
-	v := sr.resultValues
+func (sr *Runner) Med(thread int) float64 {
+	v := sr.resultValues[thread]
 
 	nn := len(v) / 2
 	if nn%2 != 0 {
@@ -172,24 +186,39 @@ func (sr *SplunkRun) Med() float64 {
 	return (v[nn+1] + v[nn]) / 2
 }
 
-func (sr *SplunkRun) Min() float64 {
-	return sr.resultValues[0]
+func (sr *Runner) Min(thread int) float64 {
+	return sr.resultValues[thread][0]
 }
 
-func (sr *SplunkRun) Max() float64 {
-	return sr.resultValues[len(sr.resultValues)-1]
+func (sr *Runner) Max(thread int) float64 {
+	return sr.resultValues[thread][len(sr.resultValues)-1]
 }
 
-func (sr *SplunkRun) PrettyPrint() {
-	fmt.Printf("\n %-12s | %-12s | %-12s | %-12s | %-12s\n",
-		"Runs", "Average", "Median", "Min", "Max")
+func (sr *Runner) PrettyPrint() {
+	sr.PrintBanner()
+	for i := 0; i < sr.Threads; i++ {
+		sr.PrintResults(i)
+	}
+	sr.PrintFooter()
+
+	if sr.vverbose {
+		fmt.Println("--------------------------------------------------------------------------------")
+		fmt.Printf("%#v\n---\n\n", sr)
+	}
+}
+
+func (sr *Runner) PrintBanner() {
+	fmt.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
+		"Thread", "Runs", "Average", "Median", "Min", "Max")
 	fmt.Println("--------------------------------------------------------------------------------")
-	sr.PrintResults()
+}
+
+func (sr *Runner) PrintFooter() {
 	fmt.Println("--------------------------------------------------------------------------------")
 	fmt.Printf(" Query: %.70s...\n\n", sr.Query)
 }
 
-func (sr *SplunkRun) PrintResults() {
-	fmt.Printf(" %-12d | %-12.4f | %-12.4f | %-12.4f | %-12.4f\n",
-		sr.Runs, sr.Avg(), sr.Med(), sr.Min(), sr.Max())
+func (sr *Runner) PrintResults(thread int) {
+	fmt.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+		thread, sr.Runs, sr.Avg(thread), sr.Med(thread), sr.Min(thread), sr.Max(thread))
 }
