@@ -2,16 +2,17 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 
+	"github.com/jmervine/splunk-benchmark/lib/printer"
 	"github.com/jmervine/splunk-benchmark/lib/search"
 )
 
-const Version = "0.0.4"
+const Version = "0.0.5"
 
 func main() {
 	var (
@@ -32,13 +33,13 @@ func main() {
 	flag.BoolVar(&version, "version", false, "Print version and exit")
 	flag.Parse()
 
-	if version {
-		log.Println("splunk-benchmark version " + Version)
-		os.Exit(0)
-	}
-
 	if threads < 1 {
 		threads = 1
+	}
+
+	if version {
+		fmt.Println("splunk-benchmark version " + Version)
+		os.Exit(0)
 	}
 
 	runner, err := search.NewRunner(host, query, threads, runs, delay, verbose, vverbose)
@@ -46,12 +47,21 @@ func main() {
 		panic(err)
 	}
 
+	pp := func() {
+		if output == "json" {
+			printer.Json(runner.Results())
+		} else {
+			r := runner.Results()
+			printer.Text(r)
+		}
+	}
+
 	if runs < 1 {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
 			<-sigs
-			runner.PrettyPrint()
+			pp()
 			os.Exit(0)
 		}()
 	}
@@ -68,9 +78,5 @@ func main() {
 
 	wg.Wait()
 
-	if output == "json" {
-		runner.JsonPrint()
-	} else {
-		runner.PrettyPrint()
-	}
+	pp()
 }

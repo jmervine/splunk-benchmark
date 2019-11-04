@@ -1,10 +1,10 @@
 package search
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +17,8 @@ const (
 	search = "/services/search/jobs"
 	status = search + "/%s"
 )
+
+var logger = log.New(os.Stdout, "", 0)
 
 type splunkStatus struct {
 	Entry []struct {
@@ -48,7 +50,7 @@ type Runner struct {
 	client       splunking.SplunkRequest
 	verbose      bool
 	vverbose     bool
-	ran, runs    int
+	runs         int
 	query        string
 	threads      int
 	delay        time.Duration
@@ -74,16 +76,25 @@ func NewRunner(host, query string, threads int, runs int, delay float64, verbose
 	sr.client, err = splunking.InitURL(host)
 
 	if vverbose {
-		log.Printf("%#v\n---\n\n", sr)
+		logger.Printf("%#v\n---\n\n", sr)
 	}
 
 	return sr, err
 }
 
 func (sr *Runner) Do(thread int) error {
+	logPrefix := fmt.Sprintf("thread=%d fn=Do", thread)
+
+	if sr.verbose || sr.vverbose {
+		logger.Printf("%s at=start", logPrefix)
+	}
+
 	for {
+		ran := len(sr.resultValues[thread])
+		run := ran + 1
+
 		if sr.verbose || sr.vverbose {
-			log.Printf("Starting run %d (thread %d)...\n", sr.ran+1, thread)
+			logger.Printf("%s run=%d at=start#loop", logPrefix, run)
 		}
 
 		err := sr.search(thread)
@@ -92,7 +103,7 @@ func (sr *Runner) Do(thread int) error {
 		}
 
 		for {
-			done, err := sr.results(thread)
+			done, err := sr.getResults(thread)
 			if err != nil {
 				return err
 			}
@@ -103,14 +114,16 @@ func (sr *Runner) Do(thread int) error {
 		}
 
 		if sr.verbose || sr.vverbose {
-			log.Printf("Finished run %d (thread %d).\n", sr.ran+1, thread)
+			logger.Printf("%s run=%d at=finish#loop", logPrefix, run)
 		}
 
-		if sr.runs > 0 && sr.ran == sr.runs {
+		if sr.runs > 0 && run == sr.runs {
 			break
 		}
+	}
 
-		sr.ran++
+	if sr.verbose || sr.vverbose {
+		logger.Printf("%s at=finish", logPrefix)
 	}
 
 	sort.Float64s(sr.resultValues[thread])
@@ -118,8 +131,12 @@ func (sr *Runner) Do(thread int) error {
 }
 
 func (sr *Runner) search(thread int) error {
+	run := len(sr.resultValues[thread]) + 1
+
+	logPrefix := fmt.Sprintf("thread=%d run=%d fn=search", thread, run)
+
 	if sr.vverbose {
-		log.Printf("  Search Sid ")
+		logger.Printf("%s at=start", logPrefix)
 	}
 
 	resp, err := sr.client.Post(search, strings.NewReader("search="+sr.query))
@@ -136,18 +153,25 @@ func (sr *Runner) search(thread int) error {
 		return err
 	}
 
-	if sr.vverbose {
-		log.Printf("%s...\n", s.Sid)
-	}
-
 	sr.sids[thread] = s.Sid
+
+	if sr.vverbose {
+		logger.Printf("%s sid=%s at=finish", logPrefix, s.Sid)
+	}
 
 	return nil
 }
 
-func (sr *Runner) results(thread int) (bool, error) {
+func (sr *Runner) getResults(thread int) (bool, error) {
+	// short sleep before checking for results
+	time.Sleep(time.Second)
+
+	run := len(sr.resultValues[thread]) + 1
+
+	logPrefix := fmt.Sprintf("thread=%d run=%d fn=getResults sid=%s ", thread, run, sr.sids[thread])
+
 	if sr.vverbose {
-		log.Printf("    Checking results for %s...", sr.sids[thread])
+		logger.Printf("%s at=start", logPrefix)
 	}
 
 	resp, err := sr.client.Get(fmt.Sprintf(status, sr.sids[thread]), nil)
@@ -164,10 +188,10 @@ func (sr *Runner) results(thread int) (bool, error) {
 	done := s.Entry[0].Content.IsDone
 
 	if sr.vverbose {
-		log.Printf(" done: %v\n", done)
-
 		if done {
-			log.Printf("  Finished Sid %s in %f.\n", sr.sids[thread], s.Entry[0].Content.RunDuration)
+			logger.Printf("%s isDone=%v duration=%f at=finish", logPrefix, done, s.Entry[0].Content.RunDuration)
+		} else {
+			logger.Printf("%s isDone=%v at=finish", logPrefix, done)
 		}
 	}
 
@@ -179,98 +203,33 @@ func (sr *Runner) results(thread int) (bool, error) {
 	return false, nil
 }
 
-func (sr *Runner) Avg(thread int) float64 {
-	return math.Avg(sr.resultValues[thread])
-}
-
-func (sr *Runner) Med(thread int) float64 {
-	return math.Med(sr.resultValues[thread])
-}
-
-func (sr *Runner) Min(thread int) float64 {
-	return math.Min(sr.resultValues[thread])
-}
-
-func (sr *Runner) Max(thread int) float64 {
-	return math.Max(sr.resultValues[thread])
-}
-
-func (sr *Runner) JsonPrint() {
-	o := Results{}
-
-	o.Query = sr.query
-	o.Average, o.Median, o.Min, o.Max = sr.agg()
-
-	for _, r := range sr.resultValues {
-		v := ResultThread{}
-		v.Average = math.Avg(r)
-		v.Median = math.Med(r)
-		v.Min = math.Min(r)
-		v.Max = math.Max(r)
-		v.Run = r
-
-		o.Thread = append(o.Thread, v)
-	}
-
-	data, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-
-	var j bytes.Buffer
-	err = json.Indent(&j, data, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println(j.String())
-}
-
-func (sr *Runner) PrettyPrint() {
-	sr.PrintBanner()
-	for i := 0; i < sr.threads; i++ {
-		sr.PrintResults(i)
-	}
-	sr.PrintAgg()
-	sr.PrintFooter()
-
-	if sr.vverbose {
-		log.Println("--------------------------------------------------------------------------------")
-		log.Printf("%#v\n---\n\n", sr)
-	}
-}
-
-func (sr *Runner) PrintBanner() {
-	log.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
-		"Thread", "Runs", "Average", "Median", "Min", "Max")
-	log.Println("--------------------------------------------------------------------------------")
-}
-
-func (sr *Runner) agg() (avg, med, min, max float64) {
+func (sr *Runner) Results() Results {
 	v := []float64{}
 	for _, t := range sr.resultValues {
 		v = append(v, t...)
 	}
 	sort.Float64s(v)
 
-	return math.Avg(v), math.Med(v), math.Min(v), math.Max(v)
-}
+	o := Results{
+		Query:   sr.query,
+		Average: math.Avg(v),
+		Median:  math.Med(v),
+		Min:     math.Min(v),
+		Max:     math.Max(v),
+		Thread:  []ResultThread{},
+	}
 
-func (sr *Runner) PrintAgg() {
-	avg, med, min, max := sr.agg()
+	for _, r := range sr.resultValues {
+		sort.Float64s(r)
 
-	log.Println("--------------------------------------------------------------------------------")
-	log.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		avg, med, min, max)
-}
+		o.Thread = append(o.Thread, ResultThread{
+			Average: math.Avg(r),
+			Median:  math.Med(r),
+			Min:     math.Min(r),
+			Max:     math.Max(r),
+			Run:     r,
+		})
+	}
 
-func (sr *Runner) PrintFooter() {
-	log.Println("--------------------------------------------------------------------------------")
-	log.Printf(" Query: %.70s...\n\n", sr.query)
-}
-
-func (sr *Runner) PrintResults(thread int) {
-	v := sr.resultValues[thread]
-	log.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		thread, sr.ran, math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
+	return o
 }
