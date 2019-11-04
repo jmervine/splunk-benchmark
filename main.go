@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -33,8 +33,12 @@ func main() {
 	flag.Parse()
 
 	if version {
-		fmt.Println("splunk-benchmark version " + Version)
+		log.Println("splunk-benchmark version " + Version)
 		os.Exit(0)
+	}
+
+	if threads < 1 {
+		threads = 1
 	}
 
 	runner, err := search.NewRunner(host, query, threads, runs, delay, verbose, vverbose)
@@ -53,9 +57,9 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(runner.Threads)
+	wg.Add(threads)
 
-	for i := 0; i < runner.Threads; i++ {
+	for i := 0; i < threads; i++ {
 		go func(t int) {
 			defer wg.Done()
 			runner.Do(t)

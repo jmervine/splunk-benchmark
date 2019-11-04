@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -26,48 +27,54 @@ type splunkStatus struct {
 	} `json:"entry"`
 }
 
-type Runner struct {
-	client   splunking.SplunkRequest
-	verbose  bool
-	vverbose bool
-	runs     int
+type ResultThread struct {
+	Average float64   `json:"average"`
+	Median  float64   `json:"median"`
+	Min     float64   `json:"min"`
+	Max     float64   `json:"max"`
+	Run     []float64 `json:"run"`
+}
 
-	Query        string
-	Threads      int
-	Runs         int
-	Delay        time.Duration
-	Sids         []string
-	Results      []map[string]float64
+type Results struct {
+	Query   string         `json:"query"`
+	Average float64        `json:"average"`
+	Median  float64        `json:"median"`
+	Min     float64        `json:"min"`
+	Max     float64        `json:"max"`
+	Thread  []ResultThread `json:"thread"`
+}
+
+type Runner struct {
+	client       splunking.SplunkRequest
+	verbose      bool
+	vverbose     bool
+	ran, runs    int
+	query        string
+	threads      int
+	delay        time.Duration
+	sids         []string
 	resultValues [][]float64
+	//Results      Results
 }
 
 func NewRunner(host, query string, threads int, runs int, delay float64, verbose, vverbose bool) (*Runner, error) {
 	var err error
 
-	if threads < 1 {
-		threads = 1
-	}
-
 	sr := new(Runner)
-	sr.Results = make([]map[string]float64, threads)
-	sr.Sids = make([]string, threads)
+	sr.sids = make([]string, threads)
 	sr.resultValues = make([][]float64, threads)
 
-	for i := 0; i < threads; i++ {
-		sr.Results[i] = make(map[string]float64)
-	}
-
-	sr.Query = query
-	sr.Threads = threads
-	sr.Runs = runs
-	sr.Delay = time.Duration(delay) * time.Second
+	sr.query = query
+	sr.threads = threads
+	sr.runs = runs
+	sr.delay = time.Duration(delay) * time.Second
 	sr.verbose = verbose
 	sr.vverbose = vverbose
 
 	sr.client, err = splunking.InitURL(host)
 
 	if vverbose {
-		fmt.Printf("%#v\n---\n\n", sr)
+		log.Printf("%#v\n---\n\n", sr)
 	}
 
 	return sr, err
@@ -76,7 +83,7 @@ func NewRunner(host, query string, threads int, runs int, delay float64, verbose
 func (sr *Runner) Do(thread int) error {
 	for {
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Starting run %d (thread %d)...\n", sr.runs+1, thread)
+			log.Printf("Starting run %d (thread %d)...\n", sr.ran+1, thread)
 		}
 
 		err := sr.search(thread)
@@ -96,14 +103,14 @@ func (sr *Runner) Do(thread int) error {
 		}
 
 		if sr.verbose || sr.vverbose {
-			fmt.Printf("Finished run %d (thread %d).\n", sr.runs+1, thread)
+			log.Printf("Finished run %d (thread %d).\n", sr.ran+1, thread)
 		}
 
-		if sr.Runs > 0 && sr.runs == sr.Runs {
+		if sr.runs > 0 && sr.ran == sr.runs {
 			break
 		}
 
-		sr.runs++
+		sr.ran++
 	}
 
 	sort.Float64s(sr.resultValues[thread])
@@ -112,10 +119,10 @@ func (sr *Runner) Do(thread int) error {
 
 func (sr *Runner) search(thread int) error {
 	if sr.vverbose {
-		fmt.Printf("  Search Sid ")
+		log.Printf("  Search Sid ")
 	}
 
-	resp, err := sr.client.Post(search, strings.NewReader("search="+sr.Query))
+	resp, err := sr.client.Post(search, strings.NewReader("search="+sr.query))
 	if err != nil {
 		return err
 	}
@@ -130,20 +137,20 @@ func (sr *Runner) search(thread int) error {
 	}
 
 	if sr.vverbose {
-		fmt.Printf("%s...\n", s.Sid)
+		log.Printf("%s...\n", s.Sid)
 	}
 
-	sr.Sids[thread] = s.Sid
+	sr.sids[thread] = s.Sid
 
 	return nil
 }
 
 func (sr *Runner) results(thread int) (bool, error) {
 	if sr.vverbose {
-		fmt.Printf("    Checking results for %s...", sr.Sids[thread])
+		log.Printf("    Checking results for %s...", sr.sids[thread])
 	}
 
-	resp, err := sr.client.Get(fmt.Sprintf(status, sr.Sids[thread]), nil)
+	resp, err := sr.client.Get(fmt.Sprintf(status, sr.sids[thread]), nil)
 	if err != nil {
 		return false, err
 	}
@@ -157,15 +164,14 @@ func (sr *Runner) results(thread int) (bool, error) {
 	done := s.Entry[0].Content.IsDone
 
 	if sr.vverbose {
-		fmt.Printf(" done: %v\n", done)
+		log.Printf(" done: %v\n", done)
 
 		if done {
-			fmt.Printf("  Finished Sid %s in %f.\n", sr.Sids[thread], s.Entry[0].Content.RunDuration)
+			log.Printf("  Finished Sid %s in %f.\n", sr.sids[thread], s.Entry[0].Content.RunDuration)
 		}
 	}
 
 	if done {
-		sr.Results[thread][sr.Sids[thread]] = s.Entry[0].Content.RunDuration
 		sr.resultValues[thread] = append(sr.resultValues[thread], s.Entry[0].Content.RunDuration)
 		return true, nil
 	}
@@ -190,30 +196,13 @@ func (sr *Runner) Max(thread int) float64 {
 }
 
 func (sr *Runner) JsonPrint() {
-	type T struct {
-		Average float64   `json:"average"`
-		Median  float64   `json:"median"`
-		Min     float64   `json:"min"`
-		Max     float64   `json:"max"`
-		Run     []float64 `json:"runDuration"`
-	}
+	o := Results{}
 
-	type O struct {
-		Query   string  `json:"query"`
-		Average float64 `json:"average"`
-		Median  float64 `json:"median"`
-		Min     float64 `json:"min"`
-		Max     float64 `json:"max"`
-		Thread  []T     `json:"thread"`
-	}
-
-	o := O{}
-
-	o.Query = sr.Query
+	o.Query = sr.query
 	o.Average, o.Median, o.Min, o.Max = sr.agg()
 
 	for _, r := range sr.resultValues {
-		v := T{}
+		v := ResultThread{}
 		v.Average = math.Avg(r)
 		v.Median = math.Med(r)
 		v.Min = math.Min(r)
@@ -234,27 +223,27 @@ func (sr *Runner) JsonPrint() {
 		panic(err)
 	}
 
-	fmt.Println(j.String())
+	log.Println(j.String())
 }
 
 func (sr *Runner) PrettyPrint() {
 	sr.PrintBanner()
-	for i := 0; i < sr.Threads; i++ {
+	for i := 0; i < sr.threads; i++ {
 		sr.PrintResults(i)
 	}
 	sr.PrintAgg()
 	sr.PrintFooter()
 
 	if sr.vverbose {
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("%#v\n---\n\n", sr)
+		log.Println("--------------------------------------------------------------------------------")
+		log.Printf("%#v\n---\n\n", sr)
 	}
 }
 
 func (sr *Runner) PrintBanner() {
-	fmt.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
+	log.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
 		"Thread", "Runs", "Average", "Median", "Min", "Max")
-	fmt.Println("--------------------------------------------------------------------------------")
+	log.Println("--------------------------------------------------------------------------------")
 }
 
 func (sr *Runner) agg() (avg, med, min, max float64) {
@@ -270,18 +259,18 @@ func (sr *Runner) agg() (avg, med, min, max float64) {
 func (sr *Runner) PrintAgg() {
 	avg, med, min, max := sr.agg()
 
-	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+	log.Println("--------------------------------------------------------------------------------")
+	log.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
 		avg, med, min, max)
 }
 
 func (sr *Runner) PrintFooter() {
-	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf(" Query: %.70s...\n\n", sr.Query)
+	log.Println("--------------------------------------------------------------------------------")
+	log.Printf(" Query: %.70s...\n\n", sr.query)
 }
 
 func (sr *Runner) PrintResults(thread int) {
 	v := sr.resultValues[thread]
-	fmt.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		thread, sr.runs, math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
+	log.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+		thread, sr.ran, math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
 }
