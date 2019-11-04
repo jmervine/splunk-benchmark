@@ -2,9 +2,9 @@ test: vet
 	go test -race -cover -mod=vendor ./...
 
 vet:
-	go vet ./...
+	go vet -race ./...
 
-build:
+build: vet
 	go build -race -o splunk-benchmark main.go
 
 tag:

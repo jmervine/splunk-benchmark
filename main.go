@@ -11,7 +11,7 @@ import (
 	"github.com/jmervine/splunk-benchmark/lib/search"
 )
 
-const Version = "0.0.3"
+const Version = "0.0.4"
 
 func main() {
 	var (

@@ -212,13 +212,13 @@ func (sr *Runner) JsonPrint() {
 	o.Query = sr.Query
 	o.Average, o.Median, o.Min, o.Max = sr.agg()
 
-	for i, _ := range sr.resultValues {
+	for _, r := range sr.resultValues {
 		v := T{}
-		v.Average = sr.Avg(i)
-		v.Median = sr.Med(i)
-		v.Min = sr.Min(i)
-		v.Max = sr.Max(i)
-		v.Run = sr.resultValues[i]
+		v.Average = math.Avg(r)
+		v.Median = math.Med(r)
+		v.Min = math.Min(r)
+		v.Max = math.Max(r)
+		v.Run = r
 
 		o.Thread = append(o.Thread, v)
 	}
@@ -281,6 +281,7 @@ func (sr *Runner) PrintFooter() {
 }
 
 func (sr *Runner) PrintResults(thread int) {
+	v := sr.resultValues[thread]
 	fmt.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
-		thread, sr.runs, sr.Avg(thread), sr.Med(thread), sr.Min(thread), sr.Max(thread))
+		thread, sr.runs, math.Avg(v), math.Med(v), math.Min(v), math.Max(v))
 }
