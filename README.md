@@ -27,15 +27,15 @@ COMMANDS:
 
 GLOBAL OPTIONS:
    --output value, -o value       Output method; text, json (default: "text")
-   --splunk-host value, -s value  Splunk hostname; e.g. https://user:pass@splunk.example.com:8089
-   --query value, -S value        Splunk search query (default: "search * | head 1")
+   --splunk-host value, -H value  Splunk hostname; e.g. https://user:pass@splunk.example.com:8089
+   --query value, -q value        Splunk search query (default: "search * | head 1")
    --runs value, -r value         Number of search runs to perform; 0 runs until SIGINT (default: 1)
    --threads value, -T value      Number of threads, e.g. 10 runs * 2 threads will run 20 total searches (default: 1)
    --delay value, -d value        Delay in seconds between runs (default: 0)
+   --summary, -s                  Summarize; show totals
    --verbose                      Verbose output
    --very-verbose                 Very verbose output
    --help, -h                     show help
-   --version, -v                  print the version
 ```
 
 #### Example

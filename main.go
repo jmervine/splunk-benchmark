@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -14,13 +13,13 @@ import (
 	"github.com/urfave/cli"
 )
 
-const Version = "0.0.6"
+const Version = "0.0.7"
 
 var (
 	delay                      float64
 	host, query, output        string
 	runs, threads              int
-	verbose, vverbose, version bool
+	verbose, vverbose, summary bool
 )
 
 func init() {
@@ -47,12 +46,12 @@ func init() {
 			Value: "text",
 		},
 		cli.StringFlag{
-			Name:     "splunk-host,s",
+			Name:     "splunk-host,H",
 			Usage:    "Splunk hostname; e.g. https://user:pass@splunk.example.com:8089",
 			Required: true,
 		},
 		cli.StringFlag{
-			Name:  "query,S",
+			Name:  "query,q",
 			Usage: "Splunk search query",
 			Value: "search * | head 1",
 		},
@@ -72,6 +71,10 @@ func init() {
 			Value: 0.0,
 		},
 		cli.BoolFlag{
+			Name:  "summary,s",
+			Usage: "Summarize; show totals",
+		},
+		cli.BoolFlag{
 			Name:  "verbose",
 			Usage: "Verbose output",
 		},
@@ -82,17 +85,13 @@ func init() {
 	}
 
 	app.Action = func(c *cli.Context) error {
-		if c.Bool("version") {
-			fmt.Printf("splunk-benchmark version %s\n", Version)
-			os.Exit(0)
-		}
-
 		output = c.String("output")
 		host = c.String("splunk-host")
 		query = c.String("query")
 		runs = c.Int("runs")
 		threads = c.Int("threads")
 		delay = c.Float64("delay")
+		summary = c.Bool("summary")
 		verbose = c.Bool("verbose")
 		vverbose = c.Bool("very-verbose")
 
@@ -116,10 +115,14 @@ func main() {
 	}
 
 	pp := func() {
-		if output == "json" {
+		r := runner.Results()
+		if output == "json" && summary {
+			printer.JsonSummary(r)
+		} else if output == "json" {
 			printer.Json(runner.Results())
+		} else if summary {
+			printer.TextSummary(r)
 		} else {
-			r := runner.Results()
 			printer.Text(r)
 		}
 	}
