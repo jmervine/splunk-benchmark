@@ -81,6 +81,7 @@ func TestJsonSummaryIsJson(t *testing.T) {
   "median": 1.2,
   "min": 1.1,
   "max": 1.3,
+  "runs": 3,
   "errors": 1
 }
 `

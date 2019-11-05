@@ -23,6 +23,7 @@ func JsonSummary(out io.Writer, res runner.Results) {
 		Median  float64 `json:"median"`
 		Min     float64 `json:"min"`
 		Max     float64 `json:"max"`
+		Runs    int     `json:"runs"`
 		Errors  int     `json:"errors"`
 	}
 
@@ -32,6 +33,7 @@ func JsonSummary(out io.Writer, res runner.Results) {
 		Min:     res.Min,
 		Max:     res.Max,
 		Errors:  res.Errors,
+		Runs:    len(res.Runs),
 	})
 }
 

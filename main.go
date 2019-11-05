@@ -60,12 +60,12 @@ func init() {
 		},
 		cli.IntFlag{
 			Name:  "runs,r",
-			Usage: "Number of search runs to perform; 0 runs until SIGINT",
+			Usage: "Number of search runs to perform",
 			Value: 1,
 		},
 		cli.IntFlag{
 			Name:  "threads,T",
-			Usage: "Number of threads, e.g. 10 runs * 2 threads will run 20 total searches",
+			Usage: "Number of threads",
 			Value: 1,
 		},
 		cli.Float64Flag{
