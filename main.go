@@ -1,25 +1,29 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"runtime"
-	"sync"
 	"syscall"
 
 	"github.com/jmervine/splunk-benchmark/lib/printer"
-	"github.com/jmervine/splunk-benchmark/lib/search"
+	"github.com/jmervine/splunk-benchmark/lib/runner"
 	"github.com/urfave/cli"
 )
 
 const Version = "0.0.7"
 
+// First will be default
+var outputMethods = []string{"text", "json", "jsonsummary"}
+
 var (
 	delay                      float64
-	host, query, output        string
+	host, query                string
 	runs, threads              int
 	verbose, vverbose, summary bool
+	printerFunc                runner.ResultPrinter
 )
 
 func init() {
@@ -42,8 +46,8 @@ func init() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "output,o",
-			Usage: "Output method; text, json",
-			Value: "text",
+			Usage: fmt.Sprintf("Output method; %v", outputMethods),
+			Value: outputMethods[0],
 		},
 		cli.StringFlag{
 			Name:     "splunk-host,H",
@@ -85,20 +89,32 @@ func init() {
 	}
 
 	app.Action = func(c *cli.Context) error {
-		output = c.String("output")
+		switch c.String("output") {
+		case "text":
+			printerFunc = printer.Text
+		case "json":
+			printerFunc = printer.Json
+		case "jsonsummary":
+			printerFunc = printer.JsonSummary
+		default:
+			return errors.New("Unknown output method.")
+		}
+
+		if c.Bool("verbose") {
+			os.Setenv("VERBOSE", "true")
+		}
+
+		if c.Bool("very-verbose") {
+			os.Setenv("VERBOSE", "true")
+			os.Setenv("VERY_VERBOSE", "true")
+		}
+
 		host = c.String("splunk-host")
 		query = c.String("query")
 		runs = c.Int("runs")
 		threads = c.Int("threads")
 		delay = c.Float64("delay")
 		summary = c.Bool("summary")
-		verbose = c.Bool("verbose")
-		vverbose = c.Bool("very-verbose")
-
-		if threads < 1 {
-			threads = 1
-		}
-		runtime.GOMAXPROCS(threads)
 
 		return nil
 	}
@@ -109,45 +125,31 @@ func init() {
 }
 
 func main() {
-	runner, err := search.NewRunner(host, query, threads, runs, delay, verbose, vverbose)
+	runner, err := runner.NewRunner(host, query, threads, runs, delay)
 	if err != nil {
 		panic(err)
 	}
 
-	pp := func() {
-		r := runner.Results()
-		if output == "json" && summary {
-			printer.JsonSummary(r)
-		} else if output == "json" {
-			printer.Json(runner.Results())
-		} else if summary {
-			printer.TextSummary(r)
-		} else {
-			printer.Text(r)
+	// Handle Cleanup
+	// TODO: Doesn't current stop running goroutes from runner.Start(), it
+	//       probably should.
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		s := 0
+		for range sig {
+			s++
+			if s == 1 {
+				runner.Finalize()
+				runner.Results().Print(printerFunc)
+				os.Exit(130)
+			} else {
+				os.Exit(130)
+			}
 		}
-	}
+	}()
 
-	if runs < 1 {
-		sigs := make(chan os.Signal, 1)
-		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			<-sigs
-			pp()
-			os.Exit(0)
-		}()
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(threads)
-
-	for i := 0; i < threads; i++ {
-		go func(t int) {
-			defer wg.Done()
-			runner.Do(t)
-		}(i)
-	}
-
-	wg.Wait()
-
-	pp()
+	runner.Start()
+	runner.Finalize()
+	runner.Results().Print(printerFunc)
 }

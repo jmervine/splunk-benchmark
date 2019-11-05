@@ -2,62 +2,91 @@ package printer
 
 import (
 	"bytes"
-	"encoding/json"
+	"io"
 	"testing"
 
-	"github.com/jmervine/splunk-benchmark/lib/search"
+	"github.com/jmervine/splunk-benchmark/lib/runner"
 )
 
-var o = search.Results{
-	Query:   "search foo",
-	Average: 1.0,
-	Median:  1.0,
-	Min:     1.0,
-	Max:     1.0,
-	Thread: []search.ResultThread{
-		search.ResultThread{
-			Average: 1.0,
-			Median:  1.0,
-			Min:     1.0,
-			Max:     1.0,
-		},
+var o = runner.Results{
+	Average: 1.2,
+	Median:  1.2,
+	Min:     1.1,
+	Max:     1.3,
+	Errors:  1,
+	Runs: []runner.Run{
+		runner.Run{Sid: "sid-foo-1", Dur: 1.1},
+		runner.Run{Sid: "sid-foo-2", Dur: 1.2},
+		runner.Run{Sid: "sid-foo-3", Dur: 1.3},
 	},
+}
+
+func TestText(t *testing.T) {
+	var out bytes.Buffer
+
+	Text(io.Writer(&out), o)
+
+	expected := `
+ Runs  | Average    | Median     | Min        | Max
+------------------------------------------------------
+ 3     | 1.200      | 1.200      | 1.100      | 1.300
+`
+	str := out.String()
+	if str != expected {
+		t.Errorf("Expected json body was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
+	}
 }
 
 func TestJsonIsJson(t *testing.T) {
 	var out bytes.Buffer
-	logger.SetOutput(&out)
 
-	Json(o)
+	Json(io.Writer(&out), o)
 
-	s := new(search.Results)
-	err := json.NewDecoder(&out).Decode(s)
+	expected := `{
+  "average": 1.2,
+  "median": 1.2,
+  "min": 1.1,
+  "max": 1.3,
+  "errors": 1,
+  "runs": [
+    {
+      "sid": "sid-foo-1",
+      "duration": 1.1
+    },
+    {
+      "sid": "sid-foo-2",
+      "duration": 1.2
+    },
+    {
+      "sid": "sid-foo-3",
+      "duration": 1.3
+    }
+  ]
+}
+`
 
-	if err != nil {
-		t.Errorf("Expected nil, got: %#v", err)
-	}
-
-	// Select a few basic values to check for equality.
-	if s.Query != o.Query || s.Thread[0].Max != o.Thread[0].Max {
-		t.Error("Expected 'o' to be eq to 's'")
+	str := out.String()
+	if str != expected {
+		t.Errorf("Expected json body was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
 	}
 }
 
 func TestJsonSummaryIsJson(t *testing.T) {
 	var out bytes.Buffer
-	logger.SetOutput(&out)
 
-	JsonSummary(o)
+	JsonSummary(io.Writer(&out), o)
 
-	s := new(search.Results)
-	err := json.NewDecoder(&out).Decode(s)
+	expected := `{
+  "average": 1.2,
+  "median": 1.2,
+  "min": 1.1,
+  "max": 1.3,
+  "errors": 1
+}
+`
 
-	if err != nil {
-		t.Errorf("Expected nil, got: %#v", err)
-	}
-
-	// Select a few basic values to check for equality.
-	if s.Query != o.Query || s.Average != o.Average || len(s.Thread) != 0 {
-		t.Error("Expected 'o' to be eq to 's'")
+	str := out.String()
+	if str != expected {
+		t.Errorf("Expected json body was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
 	}
 }
