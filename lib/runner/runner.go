@@ -1,9 +1,11 @@
 package runner
 
 import (
-	"fmt"
+	"os"
+	"os/signal"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jmervine/splunk-benchmark/lib/util"
@@ -45,8 +47,8 @@ func NewRunner(host, query string, threads int, runs int, delay float64) (*Runne
 }
 
 func (r *Runner) Start() {
+	util.Verbosef("Sending %d searches at %d per %v.\n", r.runs, r.threads, r.delay)
 	util.Vverbose("func=runner.Start at=start")
-	fmt.Printf("Sending %d searches at %d per %v.\n", r.runs, r.threads, r.delay)
 
 	defer func() {
 		util.Vverbosef("func=runner.Start runner:\n %#v\n", r)
@@ -61,6 +63,9 @@ func (r *Runner) Start() {
 	done := make(chan bool)
 	fin := make(chan bool)
 
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		for i := 0; i < r.runs; i++ {
 			<-done
@@ -71,11 +76,15 @@ func (r *Runner) Start() {
 	}()
 
 	for i := 0; i < r.runs; i++ {
-		<-thread
-		go func(t int) {
-			r.startThread(t)
-			done <- true
-		}(i)
+		select {
+		case <-sig:
+			return
+		case <-thread:
+			go func(t int) {
+				r.startThread(t)
+				done <- true
+			}(i)
+		}
 	}
 
 	<-fin
@@ -83,7 +92,7 @@ func (r *Runner) Start() {
 
 // TODO: Not sure if this should be limited to "threads"
 func (r *Runner) Finalize() {
-	fmt.Println("Collecting search results.")
+	util.Verbose("Collecting search results.")
 	util.Vverbose("func=runner.Finalize at=start")
 
 	// TODO: Channels might be better to avoid getting racy with
@@ -97,13 +106,21 @@ func (r *Runner) Finalize() {
 		util.Vverbose("func=runner.Finalize at=finish")
 	}()
 
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
 	for i := 0; i < len(r.Runs); i++ {
-		run := &r.Runs[i]
-		if run.Err == nil {
-			go func() {
-				defer wg.Done()
-				run.GetResult()
-			}()
+		select {
+		case <-sig:
+			return
+		default:
+			run := &r.Runs[i]
+			if run.Err == nil {
+				go func() {
+					defer wg.Done()
+					run.GetResult()
+				}()
+			}
 		}
 	}
 }

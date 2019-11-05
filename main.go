@@ -5,25 +5,23 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/jmervine/splunk-benchmark/lib/printer"
 	"github.com/jmervine/splunk-benchmark/lib/runner"
 	"github.com/urfave/cli"
 )
 
-const Version = "0.0.7"
+const Version = "0.0.8"
 
 // First will be default
 var outputMethods = []string{"text", "json", "jsonsummary"}
 
 var (
-	delay                      float64
-	host, query                string
-	runs, threads              int
-	verbose, vverbose, summary bool
-	printerFunc                runner.ResultPrinter
+	delay             float64
+	host, query       string
+	runs, threads     int
+	verbose, vverbose bool
+	printerFunc       runner.ResultPrinter
 )
 
 func init() {
@@ -53,6 +51,7 @@ func init() {
 			Name:     "splunk-host,H",
 			Usage:    "Splunk hostname; e.g. https://user:pass@splunk.example.com:8089",
 			Required: true,
+			EnvVar:   "SPLUNK_HOST",
 		},
 		cli.StringFlag{
 			Name:  "query,q",
@@ -75,16 +74,14 @@ func init() {
 			Value: 0.0,
 		},
 		cli.BoolFlag{
-			Name:  "summary,s",
-			Usage: "Summarize; show totals",
+			Name:   "verbose",
+			Usage:  "Verbose output",
+			EnvVar: "VERBOSE",
 		},
 		cli.BoolFlag{
-			Name:  "verbose",
-			Usage: "Verbose output",
-		},
-		cli.BoolFlag{
-			Name:  "very-verbose",
-			Usage: "Very verbose output",
+			Name:   "very-verbose",
+			Usage:  "Very verbose output",
+			EnvVar: "VERY_VERBOSE",
 		},
 	}
 
@@ -114,7 +111,6 @@ func init() {
 		runs = c.Int("runs")
 		threads = c.Int("threads")
 		delay = c.Float64("delay")
-		summary = c.Bool("summary")
 
 		return nil
 	}
@@ -129,25 +125,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	// Handle Cleanup
-	// TODO: Doesn't current stop running goroutes from runner.Start(), it
-	//       probably should.
-	sig := make(chan os.Signal, 2)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		s := 0
-		for range sig {
-			s++
-			if s == 1 {
-				runner.Finalize()
-				runner.Results().Print(printerFunc)
-				os.Exit(130)
-			} else {
-				os.Exit(130)
-			}
-		}
-	}()
 
 	runner.Start()
 	runner.Finalize()
