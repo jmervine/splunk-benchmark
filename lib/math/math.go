@@ -1,6 +1,8 @@
 package math
 
-import "sort"
+import (
+	"sort"
+)
 
 func Avg(v []float64) float64 {
 	switch l := len(v); l {
@@ -20,7 +22,8 @@ func Avg(v []float64) float64 {
 }
 
 func Med(v []float64) float64 {
-	switch l := len(v); l {
+	l := len(v)
+	switch l {
 	case 0:
 		return 0.0
 	case 1:
@@ -32,12 +35,14 @@ func Med(v []float64) float64 {
 			sort.Float64s(v)
 		}
 
-		nn := len(v) / 2
-		if nn%2 != 0 {
-			return v[nn]
+		half := l / 2
+		mn := v[half]
+
+		if l%2 == 0 {
+			mn = (mn + v[half-1]) / 2
 		}
 
-		return (v[nn+1] + v[nn]) / 2
+		return mn
 	}
 }
 
