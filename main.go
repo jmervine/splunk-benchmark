@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const Version = "0.0.6"
+const Version = "0.0.7"
 
 var (
 	delay                      float64
