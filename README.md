@@ -29,7 +29,7 @@ GLOBAL OPTIONS:
    --output value, -o value       Output method; [text json jsonsummary] (default: "text")
    --splunk-host value, -H value  Splunk hostname; e.g. https://user:pass@splunk.example.com:8089 [$SPLUNK_HOST]
    --query value, -q value        Splunk search query (default: "search * | head 1")
-   --runs value, -r value         Number of search runs to perform (default: 1)
+   --runs value, -r value         Number of search runs to perform; -1 runs until ctrl-c and then collects results (default: 1)
    --threads value, -T value      Number of threads (default: 1)
    --delay value, -d value        Delay in seconds between runs (default: 0)
    --verbose                      Verbose output [$VERBOSE]
