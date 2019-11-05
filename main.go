@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 
@@ -36,6 +37,8 @@ func main() {
 	if threads < 1 {
 		threads = 1
 	}
+
+	runtime.GOMAXPROCS(threads)
 
 	if version {
 		fmt.Println("splunk-benchmark version " + Version)
