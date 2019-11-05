@@ -3,27 +3,30 @@ package printer
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"log"
+	"os"
 
 	"github.com/jmervine/splunk-benchmark/lib/search"
 )
 
+var logger = log.New(os.Stdout, "", 0)
+
 func Text(r search.Results) {
-	fmt.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
+	logger.Printf("\n %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
 		"Thread", "Runs", "Average", "Median", "Min", "Max")
-	fmt.Println("--------------------------------------------------------------------------------")
+	logger.Println("--------------------------------------------------------------------------------")
 
 	for i, t := range r.Thread {
-		fmt.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+		logger.Printf(" %-10d | %-10d | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
 			i, len(t.Run), t.Average, t.Median, t.Min, t.Max)
 	}
 
-	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
+	logger.Println("--------------------------------------------------------------------------------")
+	logger.Printf("     -  aggregate  -     | %-10.4f | %-10.4f | %-10.4f | %-10.4f\n",
 		r.Average, r.Median, r.Min, r.Max)
 
-	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf(" Query: %.70s...\n\n", r.Query)
+	logger.Println("--------------------------------------------------------------------------------")
+	logger.Printf(" Query: %.70s...\n\n", r.Query)
 }
 
 func Json(r search.Results) {
@@ -38,5 +41,5 @@ func Json(r search.Results) {
 		panic(err)
 	}
 
-	fmt.Println(j.String())
+	logger.Println(j.String())
 }
