@@ -67,15 +67,24 @@ func (r *Runner) Start() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		for i := 0; i < r.runs; i++ {
+		var i int
+		for {
+			if i == r.runs {
+				break
+			}
 			<-done
 			thread <- struct{}{}
+			i++
 		}
 
 		fin <- true
 	}()
 
-	for i := 0; i < r.runs; i++ {
+	var i int
+	for {
+		if i == r.runs {
+			break
+		}
 		select {
 		case <-sig:
 			return
@@ -85,6 +94,7 @@ func (r *Runner) Start() {
 				done <- true
 			}(i)
 		}
+		i++
 	}
 
 	<-fin
@@ -98,7 +108,6 @@ func (r *Runner) Finalize() {
 	// TODO: Channels might be better to avoid getting racy with
 	//       updating Runner. For now I'm using sync.Mutex.
 	var wg sync.WaitGroup
-	wg.Add(len(r.Runs))
 
 	defer func() {
 		wg.Wait()
@@ -110,6 +119,7 @@ func (r *Runner) Finalize() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	for i := 0; i < len(r.Runs); i++ {
+		wg.Add(1)
 		select {
 		case <-sig:
 			return

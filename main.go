@@ -60,7 +60,7 @@ func init() {
 		},
 		cli.IntFlag{
 			Name:  "runs,r",
-			Usage: "Number of search runs to perform",
+			Usage: "Number of search runs to perform; -1 runs until ctrl-c and then collects results",
 			Value: 1,
 		},
 		cli.IntFlag{
