@@ -10,25 +10,32 @@ go get github.com/jmervine/splunk-benchmark
 #### Usage
 ```
 jmervine@laptop splunk-benchmark $ ./splunk-benchmark -h
-Usage of ./splunk-benchmark:
-  -S string
-        Splunk query (default "search * | head 1")
-  -T int
-        Number of threads, e.g. 10 runs * 2 threads will run 20 total searches (default 1)
-  -V
-        Print version and exit
-  -d float
-        Delay in seconds between runs (default 0.0)
-  -n int
-        Number of search runs to perform; 0 runs until SIGINT (default 1)
-  -o string
-        Output method: text or json (default "text")
-  -s string
-        Splunk hostname (https://uname:pword@host:port)
-  -v
-        Verbose output
-  -vv
-        Very verbose output
+NAME:
+   splunk-benchmark - search load generation
+
+USAGE:
+   splunk-benchmark [args...]
+
+DESCRIPTION:
+   Simple search load generation tool for Splunk
+
+AUTHOR:
+   Joshua Mervine <joshua@mervine.net>
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --output value, -o value       Output method; text, json (default: "text")
+   --splunk-host value, -s value  Splunk hostname; e.g. https://user:pass@splunk.example.com:8089
+   --query value, -S value        Splunk search query (default: "search * | head 1")
+   --runs value, -r value         Number of search runs to perform; 0 runs until SIGINT (default: 1)
+   --threads value, -T value      Number of threads, e.g. 10 runs * 2 threads will run 20 total searches (default: 1)
+   --delay value, -d value        Delay in seconds between runs (default: 0)
+   --verbose                      Verbose output
+   --very-verbose                 Very verbose output
+   --help, -h                     show help
+   --version, -v                  print the version
 ```
 
 #### Example
