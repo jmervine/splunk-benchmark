@@ -3,18 +3,35 @@ package printer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 
 	"github.com/jmervine/splunk-benchmark/lib/runner"
 )
 
+func Csv(out io.Writer, res runner.Results) {
+	var output = log.New(out, "", 0)
+	output.Println("sid,duration,error")
+	for _, run := range res.Runs {
+		erro := ""
+		if run.Err != nil {
+			erro = fmt.Sprintf("%v", run.Err)
+		}
+
+		output.Printf("%s,%.3f,%v\n", run.Sid, run.Dur, erro)
+	}
+}
+
 func Text(out io.Writer, res runner.Results) {
 	var output = log.New(out, "", 0)
 
-	output.Printf("\n %-5s | %-10s | %-10s | %-10s | %s\n", "Runs", "Average", "Median", "Min", "Max")
-	output.Println("------------------------------------------------------")
-	output.Printf(" %-5d | %-10.3f | %-10.3f | %-10.3f | %.3f\n", len(res.Runs), res.Average, res.Median, res.Min, res.Max)
+	output.Printf("\n %-5s | %-8s | %-8s | %-8s | %-8s | %s\n",
+		"Runs", "Average", "Median", "Min", "Max", "Errors")
+
+	output.Println("--------------------------------------------------------------")
+	output.Printf(" %-5d | %-8.3f | %-8.3f | %-8.3f | %-8.3f | %d\n",
+		len(res.Runs), res.Average, res.Median, res.Min, res.Max, res.Errors)
 }
 
 func JsonSummary(out io.Writer, res runner.Results) {

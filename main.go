@@ -11,10 +11,10 @@ import (
 	"github.com/urfave/cli"
 )
 
-const Version = "0.0.8"
+const Version = "0.0.9"
 
 // First will be default
-var outputMethods = []string{"text", "json", "jsonsummary"}
+var outputMethods = []string{"text", "json", "jsonsummary", "csv"}
 
 var (
 	delay             float64
@@ -93,6 +93,8 @@ func init() {
 			printerFunc = printer.Json
 		case "jsonsummary":
 			printerFunc = printer.JsonSummary
+		case "csv":
+			printerFunc = printer.Csv
 		default:
 			return errors.New("Unknown output method.")
 		}

@@ -2,6 +2,7 @@ package printer
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"testing"
 
@@ -18,7 +19,26 @@ var o = runner.Results{
 		runner.Run{Sid: "sid-foo-1", Dur: 1.1},
 		runner.Run{Sid: "sid-foo-2", Dur: 1.2},
 		runner.Run{Sid: "sid-foo-3", Dur: 1.3},
+		runner.Run{Sid: "sid-foo-4", Dur: 0.0, Err: fmt.Errorf("error message")},
 	},
+}
+
+func TestCsv(t *testing.T) {
+	var out bytes.Buffer
+
+	Csv(io.Writer(&out), o)
+
+	expected := `sid,duration,error
+sid-foo-1,1.100,
+sid-foo-2,1.200,
+sid-foo-3,1.300,
+sid-foo-4,0.000,error message
+`
+
+	str := out.String()
+	if str != expected {
+		t.Errorf("Expected csv was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
+	}
 }
 
 func TestText(t *testing.T) {
@@ -27,13 +47,13 @@ func TestText(t *testing.T) {
 	Text(io.Writer(&out), o)
 
 	expected := `
- Runs  | Average    | Median     | Min        | Max
-------------------------------------------------------
- 3     | 1.200      | 1.200      | 1.100      | 1.300
+ Runs  | Average  | Median   | Min      | Max      | Errors
+--------------------------------------------------------------
+ 4     | 1.200    | 1.200    | 1.100    | 1.300    | 1
 `
 	str := out.String()
 	if str != expected {
-		t.Errorf("Expected json body was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
+		t.Errorf("Expected text was not provided.\nExpected:\n`%s`\nActual:\n`%s`", expected, str)
 	}
 }
 
@@ -60,6 +80,10 @@ func TestJsonIsJson(t *testing.T) {
     {
       "sid": "sid-foo-3",
       "duration": 1.3
+    },
+    {
+      "sid": "sid-foo-4",
+      "duration": 0
     }
   ]
 }
@@ -81,7 +105,7 @@ func TestJsonSummaryIsJson(t *testing.T) {
   "median": 1.2,
   "min": 1.1,
   "max": 1.3,
-  "runs": 3,
+  "runs": 4,
   "errors": 1
 }
 `
